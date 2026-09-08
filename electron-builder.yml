@@ -1,0 +1,36 @@
+appId: cl.ikiway.posprinter
+productName: Ikiway POS Printer
+copyright: Copyright © 2026 Ikiway
+directories:
+  output: dist
+  buildResources: build
+files:
+  - app.mjs
+  - receipt.mjs
+  - server.mjs
+  - printer-manager.mjs
+  - usb-adapter.mjs
+  - electron/**/*
+  - build/icon.png
+  - package.json
+asar: true
+npmRebuild: false
+asarUnpack:
+  - node_modules/usb/**/*
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Ikiway POS Printer
+portable:
+  artifactName: ${productName}-Portable-${version}-${arch}.${ext}

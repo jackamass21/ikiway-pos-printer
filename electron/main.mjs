@@ -1,0 +1,190 @@
+import "dotenv/config";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Tray,
+} from "electron";
+import { appendFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { buildReceipt } from "../receipt.mjs";
+import { PrinterManager } from "../printer-manager.mjs";
+import { allowedOriginsFromEnv, startServer } from "../server.mjs";
+import { normalizeOrigins, SettingsStore } from "./settings.mjs";
+
+const directory = path.dirname(fileURLToPath(import.meta.url));
+const hiddenLaunch = process.argv.includes("--hidden");
+let window;
+let tray;
+let service;
+let manager;
+let settings;
+let quitting = false;
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+
+async function log(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  try { await appendFile(path.join(app.getPath("userData"), "agent.log"), line); } catch {}
+}
+
+function testReceipt() {
+  return {
+    schema: "ikiway.receipt.v1",
+    config: {
+      paper_width: "80",
+      print_copies: 1,
+      ticket_header: "IKIWAY",
+      ticket_footer: "Conexión USB correcta",
+      show_change_on_receipt: false,
+    },
+    order: { id: "PRUEBA", branch_name: "Agente local", status: "paid", subtotal: 0, tax_total: 0, total: 0 },
+    ticket: { ticket_number: "PRUEBA-USB", change_due: 0 },
+    lines: [{ description: "PRUEBA DE IMPRESIÓN", quantity: 1, unit_price: 0, line_total: 0 }],
+    payments: [],
+    electronic_document: {
+      is_electronic: false,
+      legal_name: "IKIWAY POS PRINTER",
+      type_label: "Comprobante de prueba",
+      folio: "PRUEBA",
+      issued_at: new Date().toLocaleString("es-CL"),
+      pdf417_data_uri: "",
+    },
+  };
+}
+
+function startupEnabled() {
+  return app.isPackaged && app.getLoginItemSettings({ path: process.execPath }).openAtLogin;
+}
+
+async function state({ includePrinters = true } = {}) {
+  return {
+    version: app.getVersion(),
+    serviceUrl: service?.url ?? null,
+    status: manager.status(),
+    printers: includePrinters ? await manager.list() : undefined,
+    settings: settings.get(),
+    startup: startupEnabled(),
+  };
+}
+
+function registerIpc() {
+  ipcMain.handle("agent:get-state", () => state());
+  ipcMain.handle("agent:get-status", () => state({ includePrinters: false }));
+  ipcMain.handle("agent:list-printers", () => manager.list());
+  ipcMain.handle("agent:select-printer", async (_event, key) => {
+    if (typeof key !== "string" || key.length > 200) throw new Error("Identificador de impresora inválido.");
+    await manager.select(key);
+    return state();
+  });
+  ipcMain.handle("agent:test-print", async () => {
+    const buffer = buildReceipt(testReceipt());
+    await manager.print(buffer, 1);
+    await log("Prueba de impresión enviada");
+    return { ok: true };
+  });
+  ipcMain.handle("agent:save-origins", async (_event, value) => {
+    const allowedOrigins = normalizeOrigins(value);
+    await settings.update({ allowedOrigins });
+    await log(`Orígenes actualizados: ${allowedOrigins.join(", ")}`);
+    return settings.get();
+  });
+  ipcMain.handle("agent:set-startup", (_event, enabled) => {
+    if (!app.isPackaged) return { enabled: false, available: false };
+    app.setLoginItemSettings({
+      openAtLogin: Boolean(enabled),
+      path: process.execPath,
+      args: ["--hidden"],
+    });
+    return { enabled: startupEnabled(), available: true };
+  });
+}
+
+function showWindow() {
+  if (!window) return;
+  window.show();
+  window.focus();
+}
+
+function createWindow() {
+  window = new BrowserWindow({
+    width: 820,
+    height: 720,
+    minWidth: 680,
+    minHeight: 600,
+    show: false,
+    backgroundColor: "#f4f7ff",
+    title: "Ikiway POS Printer",
+    icon: path.join(directory, "../build/icon.png"),
+    webPreferences: {
+      preload: path.join(directory, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  window.removeMenu();
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event) => event.preventDefault());
+  window.on("close", (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+  window.once("ready-to-show", () => {
+    if (!hiddenLaunch) showWindow();
+  });
+  window.loadFile(path.join(directory, "index.html"));
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(path.join(directory, "../build/icon.png")).resize({ width: 24, height: 24 });
+  tray = new Tray(icon);
+  tray.setToolTip("Ikiway POS Printer");
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Abrir Ikiway POS Printer", click: showWindow },
+    { type: "separator" },
+    {
+      label: "Salir",
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]));
+  tray.on("double-click", showWindow);
+}
+
+async function bootstrap() {
+  const settingsPath = path.join(app.getPath("userData"), "settings.json");
+  settings = new SettingsStore(settingsPath, { allowedOrigins: allowedOriginsFromEnv() });
+  await settings.load();
+  manager = new PrinterManager({
+    selectedRef: settings.get().selectedPrinter,
+    onSelectionChange: (selectedPrinter) => settings.update({ selectedPrinter }),
+  });
+  service = await startServer({ manager, allowedOrigins: () => settings.get().allowedOrigins });
+  registerIpc();
+  createWindow();
+  createTray();
+  await log(`Agente iniciado en ${service.url}`);
+}
+
+if (hasSingleInstanceLock) {
+  app.on("second-instance", showWindow);
+  app.on("activate", showWindow);
+  app.on("before-quit", () => { quitting = true; });
+  app.on("will-quit", () => service?.server.close());
+  app.whenReady().then(bootstrap).catch((error) => {
+    log(`Error de inicio: ${error.stack || error.message}`);
+    dialog.showErrorBox("Ikiway POS Printer", `No se pudo iniciar el agente:\n${error.message}`);
+    quitting = true;
+    app.quit();
+  });
+}

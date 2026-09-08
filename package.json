@@ -1,14 +1,22 @@
 {
   "name": "ikiway-pos-printer-agent",
   "version": "2.0.0",
+  "description": "Agente de impresión ESC/POS USB para Ikiway Commerce",
+  "author": "Ikiway",
   "private": true,
   "type": "module",
+  "main": "electron/main.mjs",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test"
+    "desktop": "npm run generate:icon && electron .",
+    "generate:icon": "node scripts/generate-icon.mjs",
+    "pack:win": "npm run generate:icon && electron-builder --win --x64 --dir",
+    "dist:win": "npm run generate:icon && electron-builder --win --x64",
+    "test": "node --test",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -18,5 +26,9 @@
     "pngjs": "^7.0.0",
     "qs": "^6.16.0",
     "usb": "^2.16.0"
+  },
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
   }
 }

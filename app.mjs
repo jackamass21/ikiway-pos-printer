@@ -5,13 +5,13 @@ import { buildReceipt, PayloadError } from "./receipt.mjs";
 
 export function createApp({ print, status, allowedOrigins = ["http://localhost:8000", "http://127.0.0.1:8000"], printerOptions = {} }) {
   const app = express();
-  const allowed = new Set(allowedOrigins);
+  const allowed = () => new Set(typeof allowedOrigins === "function" ? allowedOrigins() : allowedOrigins);
   app.use((req, res, next) => {
-    if (req.headers.origin && !allowed.has(req.headers.origin)) return res.status(403).json({ ok: false, error: "Origen no autorizado. Configura ALLOWED_ORIGINS en el agente." });
+    if (req.headers.origin && !allowed().has(req.headers.origin)) return res.status(403).json({ ok: false, error: "Origen no autorizado. Configura ALLOWED_ORIGINS en el agente." });
     if (req.headers.origin && req.headers["access-control-request-private-network"] === "true") res.set("Access-Control-Allow-Private-Network", "true");
     next();
   });
-  app.use(cors({ origin: (origin, cb) => cb(null, !origin || allowed.has(origin)), methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "X-Print-Job-Id"] }));
+  app.use(cors({ origin: (origin, cb) => cb(null, !origin || allowed().has(origin)), methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "X-Print-Job-Id"] }));
   app.use(express.json({ limit: "1mb" }));
   const jobs = new Map();
   let queue = Promise.resolve();

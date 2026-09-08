@@ -1,0 +1,102 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  color: #111827;
+  background: #f4f7ff;
+  --blue: #1d4fe8;
+  --blue-dark: #173eb6;
+  --line: #dfe5ef;
+  --muted: #667085;
+  --ok: #15803d;
+  --danger: #b42318;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+header {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 28px 36px;
+  color: white;
+  background: linear-gradient(135deg, #173eb6, #2457f5);
+}
+.mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 15px;
+  background: white;
+  color: var(--blue);
+  font-size: 30px;
+  font-weight: 950;
+}
+h1, h2, p { margin: 0; }
+h1 { font-size: 24px; }
+h2 { font-size: 18px; }
+header p { margin-top: 4px; color: #dce6ff; }
+.eyebrow { margin: 0 0 3px; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
+.badge {
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+}
+.badge.ok { background: #dcfce7; border-color: #86efac; color: #166534; }
+.badge.error { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+.badge.pending { background: rgba(255,255,255,.15); }
+main { display: grid; gap: 16px; width: min(760px, calc(100% - 40px)); margin: 22px auto; }
+.card {
+  display: grid;
+  gap: 13px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(24, 52, 112, .06);
+}
+.card p, .detail, small { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.section-head, .actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+label { font-size: 13px; font-weight: 800; }
+select, textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: white;
+  color: #111827;
+  font: inherit;
+}
+select { min-height: 44px; padding: 0 12px; }
+textarea { resize: vertical; padding: 11px 12px; line-height: 1.45; }
+button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--blue);
+  color: white;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+button:hover { background: var(--blue-dark); }
+button.secondary { border: 1px solid #b9c8f5; background: white; color: var(--blue); }
+button:disabled { cursor: wait; opacity: .55; }
+.compact { padding-block: 16px; }
+.toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--blue); }
+.toggle span { display: grid; gap: 2px; }
+.message { min-height: 22px; color: var(--ok); font-size: 13px; font-weight: 750; }
+.message.error { color: var(--danger); }
+footer {
+  display: flex;
+  justify-content: space-between;
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto 22px;
+  color: var(--muted);
+  font-size: 11px;
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ikiway POS Printer</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="renderer.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div class="mark" aria-hidden="true">I</div>
+      <div>
+        <p class="eyebrow">IKIWAY</p>
+        <h1>Agente de impresión POS</h1>
+        <p>Impresión térmica USB con timbre PDF417</p>
+      </div>
+      <span id="service-badge" class="badge pending">Iniciando</span>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <h2>Impresora USB</h2>
+            <p id="printer-summary">Buscando impresoras compatibles…</p>
+          </div>
+          <button id="refresh" class="secondary" type="button">Actualizar</button>
+        </div>
+        <label for="printers">Impresora seleccionada</label>
+        <select id="printers"></select>
+        <div class="actions">
+          <button id="test-print" type="button">Imprimir prueba</button>
+          <span id="printer-detail" class="detail"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Sitios autorizados</h2>
+        <p>Indica los orígenes exactos desde los que Ikiway enviará comprobantes, uno por línea.</p>
+        <label for="origins">Orígenes del POS</label>
+        <textarea id="origins" rows="4" spellcheck="false"></textarea>
+        <button id="save-origins" type="button">Guardar orígenes</button>
+      </section>
+
+      <section class="card compact">
+        <label class="toggle">
+          <input id="startup" type="checkbox">
+          <span>
+            <strong>Iniciar con Windows</strong>
+            <small>El agente quedará activo en el área de notificación.</small>
+          </span>
+        </label>
+      </section>
+
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+    </main>
+
+    <footer>
+      <span id="version"></span>
+      <span>Al cerrar la ventana, el agente continúa junto al reloj.</span>
+    </footer>
+  </body>
+</html>

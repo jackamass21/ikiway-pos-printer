@@ -4,7 +4,35 @@ Agente local para imprimir comprobantes de `ikiway-commerce` directamente en una
 impresora térmica USB compatible con ESC/POS. Imprime boletas de 58 u 80 mm y
 convierte el timbre PDF417 del TED a raster ESC/POS sin deformarlo.
 
-## Instalación en Windows
+## Aplicación ejecutable para Windows
+
+El proyecto incluye una interfaz Electron que ejecuta el agente en segundo plano,
+permite elegir la impresora USB, guardar los dominios autorizados, imprimir una
+prueba y activar el inicio automático con Windows.
+
+Para compilar el instalador y la versión portable:
+
+```bash
+npm ci
+npm run dist:win
+```
+
+También puedes hacer doble clic en `compilar_ikiway_pos_printer.bat`. Los dos
+ejecutables quedan en `dist/`:
+
+- `Ikiway POS Printer-Setup-2.0.0-x64.exe`
+- `Ikiway POS Printer-Portable-2.0.0-x64.exe`
+
+El instalador crea accesos directos. La aplicación permanece activa en el área de
+notificación al cerrar la ventana. En el equipo de caja también debes instalar
+[UsbDk](https://github.com/daynix/UsbDk/releases) para que Windows permita el
+acceso directo a la impresora USB.
+
+Los ejecutables generados localmente no llevan firma de código. Para distribución
+externa conviene configurar un certificado de firma de Windows antes de compilar;
+sin él, SmartScreen puede mostrar una advertencia al abrir el archivo.
+
+## Instalación desde el código fuente en Windows
 
 1. Instala Node.js 20 o superior.
 2. Instala [UsbDk](https://github.com/daynix/UsbDk/releases).
@@ -25,6 +53,7 @@ El estado se puede consultar en <http://127.0.0.1:17891/health>. Debe mostrar
 npm install
 npm test
 npm start
+npm run desktop
 ```
 
 Variables disponibles:
