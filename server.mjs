@@ -1,15 +1,7 @@
-import express from "express";
-import cors from "cors";
+import "dotenv/config";
 import readline from "node:readline/promises";
-import escpos from "escpos";
-import USBAdapter from "./usb-adapter.mjs";
-import QRCode from "qrcode";
-
-escpos.USB = USBAdapter;
-
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: "3mb" }));
+import USBAdapter, { sendToPrinter } from "./usb-adapter.mjs";
+import { createApp } from "./app.mjs";
 
 let selectedPrinter = null;
 let selectedPrinterRef = null;
@@ -34,15 +26,6 @@ function serializeError(error) {
   }
 
   return { error: String(error) };
-}
-
-function summarizePayload(payload = {}) {
-  return {
-    orderId: payload.order?.id ?? null,
-    buyerEmail: payload.order?.buyer_email ?? null,
-    eventName: payload.event?.name ?? null,
-    ticketCount: Array.isArray(payload.tickets) ? payload.tickets.length : 0
-  };
 }
 
 function toHex(value, width = 4) {
@@ -130,7 +113,7 @@ function isSamePrinter(device, ref) {
     device.deviceDescriptor?.idVendor === ref.vendorId &&
     device.deviceDescriptor?.idProduct === ref.productId &&
     device.busNumber === ref.busNumber &&
-    device.deviceAddress === ref.deviceAddress
+    (ref.portNumbers ? device.portNumbers?.join(".") === ref.portNumbers : device.deviceAddress === ref.deviceAddress)
   );
 }
 
@@ -142,15 +125,15 @@ function getSelectedPrinterDevice() {
   }
 
   if (!selectedPrinterRef) {
-    return printers[0];
+    return printers.length === 1 ? printers[0] : null;
   }
 
-  return printers.find((device) => isSamePrinter(device, selectedPrinterRef)) ?? printers[0];
+  return printers.find((device) => isSamePrinter(device, selectedPrinterRef)) ?? null;
 }
 
 async function choosePrinterInteractively(printers) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return printers[0] ?? null;
+    throw new Error("Hay varias impresoras. Inicia el agente en una terminal y selecciona una.");
   }
 
   const rl = readline.createInterface({
@@ -203,176 +186,18 @@ async function initializePrinterSelection() {
   }
 }
 
-function money(v) {
-  const n = Number(v || 0);
-  return `$${Math.round(n).toLocaleString("es-CL")}`;
-}
 
-function clampNumber(value, min, max, fallback) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
-}
-
-// QR size tuning (dots ~= pixels). Safe defaults for 58mm printers.
-// Note: density "d24" often looks smaller; we compensate with a larger default width.
-const QR_DENSITY = String(process.env.QR_DENSITY || "d24"); // "s8" | "d8" | "d24" (etc)
-const QR_WIDTH_DEFAULT = QR_DENSITY === "d24" ? 280 : 160;
-const QR_WIDTH = clampNumber(process.env.QR_WIDTH, 80, 420, QR_WIDTH_DEFAULT);
-const QR_MARGIN = clampNumber(process.env.QR_MARGIN, 0, 4, 1);
-const QR_FEED = clampNumber(process.env.QR_FEED, 0, 5, 0); // line feeds after QR image
-
-async function qrToImageBuffer(text) {
-  const dataUrl = await QRCode.toDataURL(text, {
-    margin: Number.isFinite(QR_MARGIN) ? QR_MARGIN : 1,
-    width: Number.isFinite(QR_WIDTH) ? QR_WIDTH : 120,
-    color: { dark: "#000000", light: "#FFFFFF" }
-  });
-
-  const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-  return Buffer.from(base64, "base64");
-}
-
-async function printReceipt(payload) {
-  log("info", "Iniciando impresion", summarizePayload(payload));
-
-  const printerDevice = getSelectedPrinterDevice();
-
-  if (!printerDevice) {
-    throw new Error("No hay impresoras USB disponibles");
-  }
-
-  log("info", "Usando impresora seleccionada", {
-    ...selectedPrinterRef,
-    currentBusNumber: printerDevice.busNumber ?? null,
-    currentDeviceAddress: printerDevice.deviceAddress ?? null
-  });
-
-  const device = new escpos.USB(printerDevice);
-  const options = { encoding: "GB18030" };
-
-  return new Promise((resolve, reject) => {
-    device.open(async (err) => {
-      if (err) {
-        log("error", "Error al abrir dispositivo USB", {
-          ...summarizePayload(payload),
-          error: serializeError(err)
-        });
-        return reject(err);
-      }
-
-      const printer = new escpos.Printer(device, options);
-
-      try {
-        printer
-          .align("ct")
-          .style("b")
-          .size(1, 1)
-          .text("TICKEO")
-          .size(0, 0)
-          .style("normal")
-          .text(payload.event.name || "")
-          .text(`${payload.event.city || ""} - ${payload.event.venue_name || ""}`.trim())
-          .text(payload.event.starts_at || "")
-          .drawLine();
-
-        printer.align("lt");
-        printer.text(`ORDEN: #${payload.order.id}`);
-        if (payload.order.buyer_name) printer.text(`NOMBRE: ${payload.order.buyer_name}`);
-        if (payload.order.buyer_email) printer.text(`EMAIL: ${payload.order.buyer_email}`);
-        if (payload.order.payment_provider) printer.text(`PAGO: ${payload.order.payment_provider}`);
-        printer.drawLine();
-
-        for (const t of payload.tickets || []) {
-          printer.style("b").text(t.ticket_type || "");
-          printer.style("normal");
-
-          if (t.zone) printer.text(`ZONA: ${t.zone}`);
-          if (t.row) printer.text(`FILA: ${t.row}`);
-          if (t.seat) printer.text(`ASIENTO: ${t.seat}`);
-          printer.text(`CODIGO: ${t.code || ""}`);
-
-          if (t.qr_url) {
-            log("info", "Imprimiendo QR como imagen", {
-              orderId: payload.order?.id ?? null,
-              ticketCode: t.code ?? null
-            });
-
-            const imageBuffer = await qrToImageBuffer(String(t.qr_url));
-
-            await new Promise((res, rej) => {
-              escpos.Image.load(imageBuffer, "image/png", (result) => {
-                if (result instanceof Error) {
-                  rej(result);
-                  return;
-                }
-
-                try {
-                  printer.align("ct");
-                  // escpos.Printer#image es async, no se puede encadenar con feed/align
-                  (async () => {
-                    await printer.image(result, QR_DENSITY);
-                    if (QR_FEED > 0) printer.feed(QR_FEED);
-                    printer.align("lt");
-                    res();
-                  })().catch(rej);
-                } catch (error) {
-                  rej(error);
-                }
-              });
-            });
-          }
-
-          printer.drawLine();
-        }
-
-        printer
-          .style("b")
-          .text(`SUBTOTAL: ${money(payload.order.subtotal)}`)
-          .text(`SERVICIO: ${money(payload.order.service_fee)}`)
-          .text(`TOTAL: ${money(payload.order.total)}`)
-          .style("normal")
-          .drawLine()
-          .align("ct")
-          .text("Gracias por tu compra")
-          .text("Tickeo")
-          .feed(4)
-          .cut()
-          .close();
-
-        log("info", "Impresion completada", summarizePayload(payload));
-        resolve(true);
-      } catch (e) {
-        try { printer.close(); } catch {}
-        log("error", "Error durante la impresion", {
-          ...summarizePayload(payload),
-          error: serializeError(e)
-        });
-        reject(e);
-      }
-    });
-  });
-}
-
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+const app = createApp({
+  allowedOrigins: (process.env.ALLOWED_ORIGINS || "http://localhost:8000,http://127.0.0.1:8000").split(",").map((value) => value.trim()).filter(Boolean),
+  printerOptions: { encoding: process.env.PRINTER_ENCODING || "cp850", codePage: Number(process.env.PRINTER_CODE_PAGE || 2) },
+  status: () => ({ printer_connected: Boolean(getSelectedPrinterDevice()), selected_printer: selectedPrinterRef }),
+  print: async (buffer, copies) => {
+    const device = getSelectedPrinterDevice();
+    if (!device) throw new Error("No se encuentra la impresora USB seleccionada");
+    await sendToPrinter(new USBAdapter(device), buffer, copies);
+  },
 });
-
-app.post("/print", async (req, res) => {
-  try {
-    await printReceipt(req.body);
-    res.json({ ok: true });
-  } catch (e) {
-    log("error", "Fallo la solicitud /print", {
-      ...summarizePayload(req.body),
-      error: serializeError(e)
-    });
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
-
 await initializePrinterSelection();
-
 app.listen(17891, "127.0.0.1", () => {
-  console.log("Tickeo POS Printer Agent escuchando en http://127.0.0.1:17891");
+  console.log("Ikiway POS Printer Agent: http://127.0.0.1:17891/health");
 });

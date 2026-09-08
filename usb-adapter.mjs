@@ -3,155 +3,92 @@ import { EventEmitter } from "node:events";
 import usbModule from "usb";
 
 const usb = usbModule.usb || usbModule;
-
 if (os.platform() === "win32" && typeof usbModule.useUsbDkBackend === "function") {
   try {
     usbModule.useUsbDkBackend();
   } catch {
-    // If UsbDk is unavailable we'll fall back to the default backend and surface the real open error later.
+    // La apertura mostrara el error real si UsbDk no esta instalado.
   }
 }
-
-const IFACE_CLASS = {
-  PRINTER: 0x07
-};
 
 export default class USBAdapter extends EventEmitter {
   static findPrinter() {
     return usb.getDeviceList().filter((device) => {
       try {
-        return device.configDescriptor.interfaces.some((iface) =>
-          iface.some((conf) => conf.bInterfaceClass === IFACE_CLASS.PRINTER)
-        );
-      } catch {
-        return false;
-      }
+        return device.configDescriptor.interfaces.some((iface) => iface.some((conf) => conf.bInterfaceClass === 7));
+      } catch { return false; }
     });
   }
 
-  static getDevice(vid, pid) {
-    return new Promise((resolve, reject) => {
-      const device = new USBAdapter(vid, pid);
-      device.open((err) => {
-        if (err) return reject(err);
-        resolve(device);
-      });
-    });
-  }
-
-  constructor(vid, pid) {
+  constructor(device) {
     super();
-
-    this.device = null;
+    this.device = device;
     this.endpoint = null;
-    this._detachListener = null;
-
-    if (vid && pid) {
-      this.device = usb.findByIds(vid, pid);
-    } else if (vid) {
-      this.device = vid;
-    } else {
-      const devices = USBAdapter.findPrinter();
-      if (devices.length) this.device = devices[0];
-    }
-
-    if (!this.device) {
-      throw new Error("Can not find printer");
-    }
-
-    this._detachListener = (device) => {
-      if (device === this.device) {
-        this.emit("detach", device);
-        this.emit("disconnect", device);
-        this.device = null;
-      }
-    };
-
-    usb.on("detach", this._detachListener);
+    this.iface = null;
+    this.opened = false;
+    this.detachedKernel = false;
   }
 
   open(callback) {
     try {
+      if (!this.device) throw new Error("No hay impresora USB seleccionada");
       this.device.open();
-    } catch (error) {
-      callback?.(error);
-      return this;
-    }
-
-    const interfaces = this.device.interfaces || [];
-    if (!interfaces.length) {
-      callback?.(new Error("Can not find endpoint from printer"));
-      return this;
-    }
-
-    let pending = interfaces.length;
-    let settled = false;
-
-    for (const iface of interfaces) {
-      iface.setAltSetting(iface.altSetting, () => {
-        if (settled) return;
-
-        try {
-          if (os.platform() !== "win32" && iface.isKernelDriverActive()) {
-            try {
-              iface.detachKernelDriver();
-            } catch (error) {
-              console.error("[ERROR] Could not detach kernel driver: %s", error);
-            }
-          }
-
-          iface.claim();
-
-          if (!this.endpoint) {
-            this.endpoint = iface.endpoints.find((endpoint) => endpoint.direction === "out") || null;
-          }
-
-          if (this.endpoint) {
-            settled = true;
-            this.emit("connect", this.device);
-            callback?.(null, this);
-            return;
-          }
-        } catch (error) {
-          settled = true;
-          callback?.(error);
-          return;
-        }
-
-        pending -= 1;
-        if (!settled && pending === 0) {
-          settled = true;
-          callback?.(new Error("Can not find endpoint from printer"));
-        }
-      });
-    }
-
+      this.opened = true;
+      this.iface = this.device.interfaces.find((iface) => iface.descriptor.bInterfaceClass === 7 && iface.endpoints.some((endpoint) => endpoint.direction === "out"));
+      if (!this.iface) throw new Error("La impresora no tiene endpoint USB de salida");
+      if (os.platform() === "linux" && this.iface.isKernelDriverActive()) {
+        this.iface.detachKernelDriver();
+        this.detachedKernel = true;
+      }
+      this.iface.claim();
+      this.claimed = true;
+      this.endpoint = this.iface.endpoints.find((endpoint) => endpoint.direction === "out");
+      this.endpoint.timeout = 10000;
+      callback?.(null);
+    } catch (error) { callback?.(error); }
     return this;
   }
 
   write(data, callback) {
-    this.emit("data", data);
-    this.endpoint.transfer(data, callback);
+    if (!this.endpoint) { callback?.(new Error("USB no esta abierto")); return this; }
+    // Limitar cada transferencia para impresoras con buffers USB pequenos.
+    let offset = 0;
+    const next = (error) => {
+      if (error || offset >= data.length) { callback?.(error || null); return; }
+      const chunk = data.subarray(offset, offset + 4096);
+      offset += chunk.length;
+      try { this.endpoint.transfer(chunk, next); } catch (err) { callback?.(err); }
+    };
+    next();
     return this;
   }
 
   close(callback) {
-    if (!this.device) {
-      callback?.(null);
-      return this;
-    }
-
-    try {
-      this.device.close();
-      if (this._detachListener) {
-        usb.off("detach", this._detachListener);
-      }
-      callback?.(null);
-      this.emit("close", this.device);
-    } catch (error) {
-      callback?.(error);
-    }
-
+    const finish = (releaseError) => {
+      let error = releaseError;
+      try {
+        if (this.detachedKernel) this.iface.attachKernelDriver();
+      } catch (err) { error ||= err; }
+      try { if (this.opened) this.device.close(); } catch (err) { error ||= err; }
+      this.opened = false;
+      this.claimed = false;
+      this.endpoint = null;
+      callback?.(error || null);
+    };
+    if (this.claimed) {
+      try { this.iface.release(true, finish); } catch (err) { finish(err); }
+    } else finish();
     return this;
   }
+}
+
+export async function sendToPrinter(device, buffer, copies = 1) {
+  const invoke = (method, ...args) => new Promise((resolve, reject) => device[method](...args, (error) => error ? reject(error) : resolve()));
+  let failure;
+  try {
+    await invoke("open");
+    for (let i = 0; i < copies; i++) await invoke("write", buffer);
+  } catch (error) { failure = error; }
+  try { await invoke("close"); } catch (error) { failure ||= error; }
+  if (failure) throw failure;
 }

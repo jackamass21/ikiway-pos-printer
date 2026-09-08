@@ -1,5 +1,5 @@
-
 node_modules/
 tmp/
 temp/
-*-lock.json
+.env
+__pycache__/
