@@ -8,12 +8,12 @@ import {
   nativeImage,
   Tray,
 } from "electron";
-import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildReceipt } from "../receipt.mjs";
 import { PrinterManager } from "../printer-manager.mjs";
 import { allowedOriginsFromEnv, startServer } from "../server.mjs";
+import { LogStore } from "./log-store.mjs";
 import { normalizeOrigins, SettingsStore } from "./settings.mjs";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
@@ -23,14 +23,15 @@ let tray;
 let service;
 let manager;
 let settings;
+let logs;
 let quitting = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 
-async function log(message) {
-  const line = `[${new Date().toISOString()}] ${message}\n`;
-  try { await appendFile(path.join(app.getPath("userData"), "agent.log"), line); } catch {}
+async function record(entry) {
+  if (logs) return logs.append(entry);
+  console[entry.level === "error" ? "error" : "log"](entry.message);
 }
 
 function testReceipt() {
@@ -62,7 +63,7 @@ function startupEnabled() {
   return app.isPackaged && app.getLoginItemSettings({ path: process.execPath }).openAtLogin;
 }
 
-async function state({ includePrinters = true } = {}) {
+async function state({ includePrinters = true, includeLogs = true } = {}) {
   return {
     version: app.getVersion(),
     serviceUrl: service?.url ?? null,
@@ -70,28 +71,43 @@ async function state({ includePrinters = true } = {}) {
     printers: includePrinters ? await manager.list() : undefined,
     settings: settings.get(),
     startup: startupEnabled(),
+    logs: includeLogs ? await logs.list(100) : undefined,
+    logPath: logs.filePath,
   };
 }
 
 function registerIpc() {
   ipcMain.handle("agent:get-state", () => state());
-  ipcMain.handle("agent:get-status", () => state({ includePrinters: false }));
+  ipcMain.handle("agent:get-status", () => state({ includePrinters: false, includeLogs: false }));
+  ipcMain.handle("agent:get-logs", () => logs.list(250));
   ipcMain.handle("agent:list-printers", () => manager.list());
   ipcMain.handle("agent:select-printer", async (_event, key) => {
     if (typeof key !== "string" || key.length > 200) throw new Error("Identificador de impresora inválido.");
-    await manager.select(key);
-    return state();
+    try {
+      await manager.select(key);
+      await record({ level: "info", event: "printer.selected", message: "Impresora USB seleccionada", meta: manager.status().selected_printer });
+      return state();
+    } catch (error) {
+      await record({ level: "error", event: "printer.error", message: `No se pudo seleccionar la impresora: ${error.message}` });
+      throw error;
+    }
   });
   ipcMain.handle("agent:test-print", async () => {
-    const buffer = buildReceipt(testReceipt());
-    await manager.print(buffer, 1);
-    await log("Prueba de impresión enviada");
-    return { ok: true };
+    await record({ level: "info", event: "print.test", message: "Prueba de impresión solicitada" });
+    try {
+      const buffer = buildReceipt(testReceipt());
+      await manager.print(buffer, 1);
+      await record({ level: "info", event: "print.test.success", message: "Prueba de impresión enviada correctamente" });
+      return { ok: true };
+    } catch (error) {
+      await record({ level: "error", event: "print.test.error", message: `Error en prueba de impresión: ${error.message}` });
+      throw error;
+    }
   });
   ipcMain.handle("agent:save-origins", async (_event, value) => {
     const allowedOrigins = normalizeOrigins(value);
     await settings.update({ allowedOrigins });
-    await log(`Orígenes actualizados: ${allowedOrigins.join(", ")}`);
+    await record({ level: "info", event: "settings.origins", message: "Orígenes autorizados actualizados", meta: { origins: allowedOrigins.join(", ") } });
     return settings.get();
   });
   ipcMain.handle("agent:set-startup", (_event, enabled) => {
@@ -101,7 +117,9 @@ function registerIpc() {
       path: process.execPath,
       args: ["--hidden"],
     });
-    return { enabled: startupEnabled(), available: true };
+    const result = { enabled: startupEnabled(), available: true };
+    record({ level: "info", event: "settings.startup", message: result.enabled ? "Inicio automático activado" : "Inicio automático desactivado" });
+    return result;
   });
 }
 
@@ -162,18 +180,24 @@ function createTray() {
 }
 
 async function bootstrap() {
-  const settingsPath = path.join(app.getPath("userData"), "settings.json");
+  const userDataPath = app.getPath("userData");
+  logs = new LogStore(path.join(userDataPath, "agent.jsonl"));
+  const settingsPath = path.join(userDataPath, "settings.json");
   settings = new SettingsStore(settingsPath, { allowedOrigins: allowedOriginsFromEnv() });
   await settings.load();
   manager = new PrinterManager({
     selectedRef: settings.get().selectedPrinter,
     onSelectionChange: (selectedPrinter) => settings.update({ selectedPrinter }),
   });
-  service = await startServer({ manager, allowedOrigins: () => settings.get().allowedOrigins });
+  service = await startServer({
+    manager,
+    allowedOrigins: () => settings.get().allowedOrigins,
+    logEvent: (entry) => record(entry),
+  });
   registerIpc();
   createWindow();
   createTray();
-  await log(`Agente iniciado en ${service.url}`);
+  await record({ level: "info", event: "agent.started", message: `Agente iniciado en ${service.url}` });
 }
 
 if (hasSingleInstanceLock) {
@@ -182,7 +206,7 @@ if (hasSingleInstanceLock) {
   app.on("before-quit", () => { quitting = true; });
   app.on("will-quit", () => service?.server.close());
   app.whenReady().then(bootstrap).catch((error) => {
-    log(`Error de inicio: ${error.stack || error.message}`);
+    record({ level: "error", event: "agent.error", message: `Error de inicio: ${error.stack || error.message}` });
     dialog.showErrorBox("Ikiway POS Printer", `No se pudo iniciar el agente:\n${error.message}`);
     quitting = true;
     app.quit();

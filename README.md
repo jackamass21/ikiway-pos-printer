@@ -32,6 +32,12 @@ Los ejecutables generados localmente no llevan firma de código. Para distribuci
 externa conviene configurar un certificado de firma de Windows antes de compilar;
 sin él, SmartScreen puede mostrar una advertencia al abrir el archivo.
 
+La sección **Actividad y errores** muestra cada solicitud de impresión con fecha y
+hora, número de venta, ticket, copias y resultado. Los eventos también se guardan
+en `agent.jsonl` dentro de la carpeta de datos de la aplicación; el panel indica la
+ruta exacta. El archivo rota automáticamente para no crecer sin límite y no guarda
+el contenido completo de la boleta.
+
 ## Instalación desde el código fuente en Windows
 
 1. Instala Node.js 20 o superior.

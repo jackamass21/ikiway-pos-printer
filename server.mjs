@@ -19,12 +19,17 @@ export async function startServer({
     encoding: process.env.PRINTER_ENCODING || "cp850",
     codePage: Number(process.env.PRINTER_CODE_PAGE || 2),
   },
+  logEvent = ({ level, message, meta }) => {
+    const details = Object.keys(meta ?? {}).length ? ` ${JSON.stringify(meta)}` : "";
+    console[level === "error" ? "error" : level === "warn" ? "warn" : "log"](`[${new Date().toISOString()}] ${message}${details}`);
+  },
   interactive = false,
 } = {}) {
   await manager.initialize({ interactive });
   const application = createApp({
     allowedOrigins,
     printerOptions,
+    logEvent,
     status: () => manager.status(),
     print: (buffer, copies) => manager.print(buffer, copies),
   });

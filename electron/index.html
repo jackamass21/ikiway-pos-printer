@@ -54,6 +54,18 @@
         </label>
       </section>
 
+      <section class="card log-card">
+        <div class="section-head">
+          <div>
+            <h2>Actividad y errores</h2>
+            <p id="log-summary">Cargando historial…</p>
+          </div>
+          <button id="refresh-logs" class="secondary" type="button">Actualizar</button>
+        </div>
+        <div id="logs" class="logs" role="log" aria-live="polite"></div>
+        <p id="log-path" class="log-path"></p>
+      </section>
+
       <p id="message" class="message" role="status" aria-live="polite"></p>
     </main>
 

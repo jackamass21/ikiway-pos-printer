@@ -10,6 +10,10 @@
     origins: document.getElementById("origins"),
     saveOrigins: document.getElementById("save-origins"),
     startup: document.getElementById("startup"),
+    logs: document.getElementById("logs"),
+    logSummary: document.getElementById("log-summary"),
+    logPath: document.getElementById("log-path"),
+    refreshLogs: document.getElementById("refresh-logs"),
     message: document.getElementById("message"),
     version: document.getElementById("version"),
   };
@@ -57,6 +61,48 @@
       : `${printers.length} impresora(s) detectada(s)`;
   }
 
+  function renderLogs(entries) {
+    elements.logs.replaceChildren();
+    elements.logSummary.textContent = `${entries.length} evento(s) reciente(s) · actualización automática`;
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.className = "log-empty";
+      empty.textContent = "Todavía no hay eventos registrados.";
+      elements.logs.append(empty);
+      return;
+    }
+    for (const entry of entries) {
+      const row = document.createElement("div");
+      row.className = `log-entry ${entry.level}`;
+      const time = document.createElement("span");
+      time.className = "log-time";
+      const parsedDate = new Date(entry.timestamp);
+      time.textContent = Number.isNaN(parsedDate.getTime()) ? entry.timestamp : parsedDate.toLocaleString("es-CL");
+      const level = document.createElement("span");
+      level.className = "log-level";
+      level.textContent = entry.level === "error" ? "Error" : entry.level === "warn" ? "Aviso" : "Info";
+      const content = document.createElement("span");
+      content.className = "log-content";
+      const description = document.createElement("strong");
+      description.textContent = entry.message;
+      content.append(description);
+      const ignored = new Set(["timestamp", "level", "event", "message"]);
+      const metadata = Object.entries(entry).filter(([key]) => !ignored.has(key));
+      if (metadata.length) {
+        const details = document.createElement("span");
+        details.className = "log-meta";
+        details.textContent = metadata.map(([key, value]) => `${key}: ${value}`).join(" · ");
+        content.append(details);
+      }
+      row.append(time, level, content);
+      elements.logs.append(row);
+    }
+  }
+
+  async function refreshLogs() {
+    try { renderLogs(await window.ikiway.getLogs()); } catch (error) { message(error.message, true); }
+  }
+
   async function load() {
     try {
       const state = await window.ikiway.getState();
@@ -66,6 +112,8 @@
       elements.startup.checked = state.startup;
       elements.startup.disabled = !state.serviceUrl;
       elements.version.textContent = `Versión ${state.version} · ${state.serviceUrl}`;
+      elements.logPath.textContent = `Archivo persistente: ${state.logPath}`;
+      renderLogs(state.logs);
     } catch (error) {
       message(error.message, true);
     }
@@ -103,7 +151,7 @@
       await window.ikiway.testPrint();
       message("Prueba enviada. Verifica el papel impreso.");
     } catch (error) { message(error.message, true); }
-    finally { elements.test.disabled = false; }
+    finally { elements.test.disabled = false; refreshLogs(); }
   });
 
   elements.saveOrigins.addEventListener("click", async () => {
@@ -125,8 +173,15 @@
     } catch (error) { message(error.message, true); }
   });
 
+  elements.refreshLogs.addEventListener("click", async () => {
+    elements.refreshLogs.disabled = true;
+    await refreshLogs();
+    elements.refreshLogs.disabled = false;
+  });
+
   setInterval(async () => {
     try { renderStatus(await window.ikiway.getStatus()); } catch {}
   }, 5000);
+  setInterval(refreshLogs, 3000);
   load();
 })();

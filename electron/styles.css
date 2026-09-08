@@ -92,6 +92,35 @@ button:disabled { cursor: wait; opacity: .55; }
 .toggle span { display: grid; gap: 2px; }
 .message { min-height: 22px; color: var(--ok); font-size: 13px; font-weight: 750; }
 .message.error { color: var(--danger); }
+.logs {
+  display: grid;
+  gap: 8px;
+  max-height: 290px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.log-entry {
+  display: grid;
+  grid-template-columns: 132px 72px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-left: 4px solid #93c5fd;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 12px;
+}
+.log-entry.warn { border-left-color: #f59e0b; background: #fffbeb; }
+.log-entry.error { border-left-color: #ef4444; background: #fff1f2; }
+.log-time, .log-level { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log-level { font-weight: 900; text-transform: uppercase; }
+.log-entry.error .log-level { color: var(--danger); }
+.log-entry.warn .log-level { color: #a16207; }
+.log-content { display: grid; gap: 3px; min-width: 0; }
+.log-content strong { overflow-wrap: anywhere; }
+.log-meta { color: var(--muted); overflow-wrap: anywhere; }
+.log-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+.log-path { overflow-wrap: anywhere; font-size: 11px !important; }
 footer {
   display: flex;
   justify-content: space-between;
