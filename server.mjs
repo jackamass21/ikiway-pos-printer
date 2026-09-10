@@ -11,7 +11,7 @@ export function allowedOriginsFromEnv() {
 
 export async function startServer({
   host = "127.0.0.1",
-  port = 17891,
+  port = 17892,
   manager,
   allowedOrigins = allowedOriginsFromEnv(),
   printerOptions = {

@@ -20,8 +20,8 @@ npm run dist:win
 También puedes hacer doble clic en `compilar_ikiway_pos_printer.bat`. Los dos
 ejecutables quedan en `dist/`:
 
-- `Ikiway-POS-Printer-Setup-2.1.0-x64.exe`
-- `Ikiway-POS-Printer-Portable-2.1.0-x64.exe`
+- `Ikiway-POS-Printer-Setup-2.1.4-x64.exe`
+- `Ikiway-POS-Printer-Portable-2.1.4-x64.exe`
 
 El instalador crea accesos directos. La aplicación permanece activa en el área de
 notificación al cerrar la ventana. En el equipo de caja también debes instalar
@@ -57,7 +57,7 @@ estilo Morgan, con método, ruta, código de respuesta y duración.
 6. En Ikiway, entra a **Configuración TPV > Impresión** y selecciona
    **Agente USB Ikiway (PDF417)**.
 
-El estado se puede consultar en <http://127.0.0.1:17891/health>. Debe mostrar
+El estado se puede consultar en <http://127.0.0.1:17892/health>. Debe mostrar
 `"schema":"ikiway.receipt.v1"` y `"printer_connected":true`.
 
 ## Desarrollo
@@ -76,25 +76,7 @@ Variables disponibles:
 - `PRINTER_ENCODING`: codificación ESC/POS. Valor predeterminado: `cp850`.
 - `PRINTER_CODE_PAGE`: número de tabla de caracteres ESC/POS. Predeterminado: `2`.
 
-El servicio escucha únicamente en `127.0.0.1:17891`. Cada solicitud lleva un
+El servicio escucha únicamente en `127.0.0.1:17892`. Cada solicitud lleva un
 identificador idempotente: recargar la página o consultar un envío dudoso no
 duplica automáticamente el ticket. El botón **Reimprimir copia** sí genera una
 nueva impresión después de confirmación.
-
-## Integración con ikiway-commerce
-
-Los archivos de la integración están en `integration/ikiway-commerce/`, con la
-misma estructura del proyecto Django. Incluyen la migración `0012`, el contrato
-del comprobante, el cliente del agente y la configuración del método de impresión.
-
-Después de instalarlos en `ikiway-commerce`, ejecuta:
-
-```bash
-python manage.py migrate
-python manage.py collectstatic --noinput
-```
-
-La impresión del navegador sigue disponible desde la vista del ticket. Si un DTE
-no contiene TED o el PDF417 no cabe en el ancho configurado, Ikiway bloquea el
-envío USB y muestra el motivo, para evitar imprimir una boleta electrónica sin su
-timbre.

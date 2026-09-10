@@ -36,7 +36,7 @@ if not exist .env (
 )
 
 echo Iniciando agente de impresion...
-echo Estado: http://127.0.0.1:17891/health
+echo Estado: http://127.0.0.1:17892/health
 echo.
 npm start
 
