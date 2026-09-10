@@ -10,6 +10,9 @@
     origins: document.getElementById("origins"),
     saveOrigins: document.getElementById("save-origins"),
     startup: document.getElementById("startup"),
+    updateSummary: document.getElementById("update-summary"),
+    checkUpdates: document.getElementById("check-updates"),
+    installUpdate: document.getElementById("install-update"),
     logs: document.getElementById("logs"),
     logSummary: document.getElementById("log-summary"),
     logPath: document.getElementById("log-path"),
@@ -28,6 +31,24 @@
     elements.badge.textContent = connected ? "Agente activo" : "Sin impresora";
     elements.badge.className = `badge ${connected ? "ok" : "error"}`;
     elements.test.disabled = !connected;
+    if (state.update) renderUpdate(state.update);
+  }
+
+  function renderUpdate(update) {
+    if (!update) return;
+    const version = update.availableVersion || update.currentVersion;
+    const messages = {
+      unavailable: "Las actualizaciones automáticas están disponibles en el instalador de Windows.",
+      idle: `Versión ${update.currentVersion} · comprobación automática activa.`,
+      checking: "Buscando actualizaciones en GitHub…",
+      current: `Versión ${update.currentVersion} · aplicación actualizada.`,
+      downloading: `Descargando versión ${version}${Number.isFinite(update.percent) ? ` · ${Math.round(update.percent)}%` : ""}.`,
+      downloaded: `Versión ${version} lista. Reinicia para instalarla.`,
+      error: `Error al buscar actualizaciones: ${update.error || "error desconocido"}`,
+    };
+    elements.updateSummary.textContent = messages[update.status] || messages.idle;
+    elements.checkUpdates.disabled = !update.enabled || ["checking", "downloading"].includes(update.status);
+    elements.installUpdate.hidden = update.status !== "downloaded";
   }
 
   function renderPrinters(printers) {
@@ -173,6 +194,21 @@
     } catch (error) { message(error.message, true); }
   });
 
+  elements.checkUpdates.addEventListener("click", async () => {
+    elements.checkUpdates.disabled = true;
+    try {
+      renderUpdate(await window.ikiway.checkUpdates());
+    } catch (error) { message(error.message, true); }
+  });
+
+  elements.installUpdate.addEventListener("click", async () => {
+    if (!window.confirm("La aplicación se cerrará y reiniciará para instalar la actualización. ¿Continuar?")) return;
+    try {
+      const started = await window.ikiway.installUpdate();
+      if (!started) message("La actualización todavía no está lista para instalar.", true);
+    } catch (error) { message(error.message, true); }
+  });
+
   elements.refreshLogs.addEventListener("click", async () => {
     elements.refreshLogs.disabled = true;
     await refreshLogs();
@@ -183,5 +219,6 @@
     try { renderStatus(await window.ikiway.getStatus()); } catch {}
   }, 5000);
   setInterval(refreshLogs, 3000);
+  window.ikiway.onUpdateState(renderUpdate);
   load();
 })();

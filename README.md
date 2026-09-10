@@ -20,8 +20,8 @@ npm run dist:win
 También puedes hacer doble clic en `compilar_ikiway_pos_printer.bat`. Los dos
 ejecutables quedan en `dist/`:
 
-- `Ikiway POS Printer-Setup-2.0.0-x64.exe`
-- `Ikiway POS Printer-Portable-2.0.0-x64.exe`
+- `Ikiway-POS-Printer-Setup-2.1.0-x64.exe`
+- `Ikiway-POS-Printer-Portable-2.1.0-x64.exe`
 
 El instalador crea accesos directos. La aplicación permanece activa en el área de
 notificación al cerrar la ventana. En el equipo de caja también debes instalar
@@ -31,6 +31,12 @@ acceso directo a la impresora USB.
 Los ejecutables generados localmente no llevan firma de código. Para distribución
 externa conviene configurar un certificado de firma de Windows antes de compilar;
 sin él, SmartScreen puede mostrar una advertencia al abrir el archivo.
+
+La versión instalada busca actualizaciones en GitHub al iniciar y cada seis horas.
+Cuando encuentra una versión nueva la descarga en segundo plano y permite reiniciar
+para instalarla; si se cierra el agente, la actualización pendiente se instala al
+salir. La versión portable se publica como descarga manual y no se actualiza a sí
+misma.
 
 La sección **Actividad y errores** muestra cada solicitud de impresión con fecha y
 hora, número de venta, ticket, copias y resultado. Los eventos también se guardan

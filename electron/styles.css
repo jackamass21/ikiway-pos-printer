@@ -121,6 +121,14 @@ button:disabled { cursor: wait; opacity: .55; }
 .log-meta { color: var(--muted); overflow-wrap: anywhere; }
 .log-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
 .log-path { overflow-wrap: anywhere; font-size: 11px !important; }
+.update-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.update-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.update-actions button { width: auto; white-space: nowrap; }
 footer {
   display: flex;
   justify-content: space-between;

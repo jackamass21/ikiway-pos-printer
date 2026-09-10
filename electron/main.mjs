@@ -15,6 +15,7 @@ import { PrinterManager } from "../printer-manager.mjs";
 import { allowedOriginsFromEnv, startServer } from "../server.mjs";
 import { LogStore } from "./log-store.mjs";
 import { normalizeOrigins, SettingsStore } from "./settings.mjs";
+import { UpdateManager } from "./updater.mjs";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const hiddenLaunch = process.argv.includes("--hidden");
@@ -24,6 +25,7 @@ let service;
 let manager;
 let settings;
 let logs;
+let updates;
 let quitting = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -73,6 +75,7 @@ async function state({ includePrinters = true, includeLogs = true } = {}) {
     startup: startupEnabled(),
     logs: includeLogs ? await logs.list(100) : undefined,
     logPath: logs.filePath,
+    update: updates?.getState() ?? null,
   };
 }
 
@@ -80,6 +83,8 @@ function registerIpc() {
   ipcMain.handle("agent:get-state", () => state());
   ipcMain.handle("agent:get-status", () => state({ includePrinters: false, includeLogs: false }));
   ipcMain.handle("agent:get-logs", () => logs.list(250));
+  ipcMain.handle("agent:check-updates", () => updates.check({ manual: true }));
+  ipcMain.handle("agent:install-update", () => updates.install());
   ipcMain.handle("agent:list-printers", () => manager.list());
   ipcMain.handle("agent:select-printer", async (_event, key) => {
     if (typeof key !== "string" || key.length > 200) throw new Error("Identificador de impresora inválido.");
@@ -167,6 +172,10 @@ function createTray() {
   tray.setToolTip("Ikiway POS Printer");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Abrir Ikiway POS Printer", click: showWindow },
+    {
+      label: "Buscar actualizaciones",
+      click: () => { showWindow(); updates.check({ manual: true }); },
+    },
     { type: "separator" },
     {
       label: "Salir",
@@ -195,8 +204,16 @@ async function bootstrap() {
     logEvent: (entry) => record(entry),
   });
   registerIpc();
+  updates = new UpdateManager({
+    enabled: app.isPackaged && process.platform === "win32",
+    currentVersion: app.getVersion(),
+    record,
+    onChange: (update) => window?.webContents.send("agent:update-state", update),
+    beforeInstall: () => { quitting = true; },
+  });
   createWindow();
   createTray();
+  updates.start();
   await record({ level: "info", event: "agent.started", message: `Agente iniciado en ${service.url}` });
 }
 
@@ -204,7 +221,10 @@ if (hasSingleInstanceLock) {
   app.on("second-instance", showWindow);
   app.on("activate", showWindow);
   app.on("before-quit", () => { quitting = true; });
-  app.on("will-quit", () => service?.server.close());
+  app.on("will-quit", () => {
+    updates?.stop();
+    service?.server.close();
+  });
   app.whenReady().then(bootstrap).catch((error) => {
     record({ level: "error", event: "agent.error", message: `Error de inicio: ${error.stack || error.message}` });
     dialog.showErrorBox("Ikiway POS Printer", `No se pudo iniciar el agente:\n${error.message}`);

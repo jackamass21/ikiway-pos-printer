@@ -1,6 +1,10 @@
 appId: cl.ikiway.posprinter
 productName: Ikiway POS Printer
 copyright: Copyright © 2026 Ikiway
+publish:
+  provider: github
+  owner: jackamass21
+  repo: ikiway-pos-printer
 directories:
   output: dist
   buildResources: build
@@ -25,7 +29,7 @@ win:
     - target: portable
       arch: [x64]
 nsis:
-  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  artifactName: Ikiway-POS-Printer-Setup-${version}-${arch}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
@@ -33,4 +37,4 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Ikiway POS Printer
 portable:
-  artifactName: ${productName}-Portable-${version}-${arch}.${ext}
+  artifactName: Ikiway-POS-Printer-Portable-${version}-${arch}.${ext}
