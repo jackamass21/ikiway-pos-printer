@@ -11,7 +11,6 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildReceipt } from "../receipt.mjs";
-import { PrinterManager } from "../printer-manager.mjs";
 import { allowedOriginsFromEnv, startServer } from "../server.mjs";
 import { LogStore } from "./log-store.mjs";
 import { normalizeOrigins, SettingsStore } from "./settings.mjs";
@@ -194,6 +193,10 @@ async function bootstrap() {
   const settingsPath = path.join(userDataPath, "settings.json");
   settings = new SettingsStore(settingsPath, { allowedOrigins: allowedOriginsFromEnv() });
   await settings.load();
+  // Keep the USB native module out of Electron's initial module graph. If it
+  // cannot be loaded on a customer's computer, the bootstrap catch below can
+  // show the actual error instead of Electron exiting without diagnostics.
+  const { PrinterManager } = await import("../printer-manager.mjs");
   manager = new PrinterManager({
     selectedRef: settings.get().selectedPrinter,
     onSelectionChange: (selectedPrinter) => settings.update({ selectedPrinter }),

@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import { createApp } from "./app.mjs";
-import { PrinterManager } from "./printer-manager.mjs";
 
 export function allowedOriginsFromEnv() {
   return (process.env.ALLOWED_ORIGINS || "http://localhost:8000,http://127.0.0.1:8000")
@@ -13,7 +12,7 @@ export function allowedOriginsFromEnv() {
 export async function startServer({
   host = "127.0.0.1",
   port = 17891,
-  manager = new PrinterManager(),
+  manager,
   allowedOrigins = allowedOriginsFromEnv(),
   printerOptions = {
     encoding: process.env.PRINTER_ENCODING || "cp850",
@@ -25,6 +24,13 @@ export async function startServer({
   },
   interactive = false,
 } = {}) {
+  // USB uses a native module. Delay loading it until the server is actually
+  // started so Electron can report an actionable startup error if Windows
+  // cannot load that native dependency on a particular machine.
+  if (!manager) {
+    const { PrinterManager } = await import("./printer-manager.mjs");
+    manager = new PrinterManager();
+  }
   await manager.initialize({ interactive });
   const application = createApp({
     allowedOrigins,
