@@ -14,7 +14,7 @@
     "desktop": "npm run generate:icon && electron .",
     "generate:icon": "node scripts/generate-icon.mjs",
     "pack:win": "npm run generate:icon && electron-builder --win --x64 --dir",
-    "dist:win": "npm run generate:icon && electron-builder --win --x64",
+    "dist:win": "npm run generate:icon && electron-builder --win --x64 --publish never",
     "test": "node --test",
     "postinstall": "electron-builder install-app-deps"
   },
