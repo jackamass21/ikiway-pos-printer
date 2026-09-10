@@ -36,7 +36,8 @@ La sección **Actividad y errores** muestra cada solicitud de impresión con fec
 hora, número de venta, ticket, copias y resultado. Los eventos también se guardan
 en `agent.jsonl` dentro de la carpeta de datos de la aplicación; el panel indica la
 ruta exacta. El archivo rota automáticamente para no crecer sin límite y no guarda
-el contenido completo de la boleta.
+el contenido completo de la boleta. Cada petición HTTP también queda registrada al
+estilo Morgan, con método, ruta, código de respuesta y duración.
 
 ## Instalación desde el código fuente en Windows
 

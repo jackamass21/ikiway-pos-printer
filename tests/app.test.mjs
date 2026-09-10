@@ -25,6 +25,21 @@ test("health expone el contrato compatible", async () => {
   });
 });
 
+test("registra cada peticion HTTP con metodo, ruta, estado y duracion", async () => {
+  const events = [];
+  await withServer(async (base) => {
+    const response = await fetch(`${base}/health`, { headers: { Origin: "https://pos.ikiway.cl" } });
+    await response.json();
+    const access = events.find((entry) => entry.event === "http.request");
+    assert.equal(access.level, "info");
+    assert.equal(access.meta.method, "GET");
+    assert.equal(access.meta.route, "/health");
+    assert.equal(access.meta.status, 200);
+    assert.match(access.meta.durationMs, /^\d+\.\d$/);
+    assert.match(access.message, /^GET \/health 200 \d+\.\d ms$/);
+  }, { logEvent: (entry) => events.push(entry) });
+});
+
 test("un job repetido se imprime una sola vez", async () => {
   let calls = 0;
   const events = [];

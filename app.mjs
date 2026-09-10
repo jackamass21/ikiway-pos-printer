@@ -16,6 +16,22 @@ export function createApp({ print, status, logEvent = () => {}, allowedOrigins =
     copies: req.body?.config?.print_copies,
   });
   app.use((req, res, next) => {
+    const startedAt = process.hrtime.bigint();
+    res.once("finish", () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+      const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+      const method = req.method;
+      const route = req.path;
+      emitLog(level, "http.request", `${method} ${route} ${res.statusCode} ${durationMs.toFixed(1)} ms`, {
+        method,
+        route,
+        status: res.statusCode,
+        durationMs: durationMs.toFixed(1),
+      });
+    });
+    next();
+  });
+  app.use((req, res, next) => {
     if (req.headers.origin && !allowed().has(req.headers.origin)) {
       if (req.path === "/print") emitLog("warn", "print.rejected", "Solicitud rechazada: origen no autorizado", { origin: req.headers.origin });
       return res.status(403).json({ ok: false, error: "Origen no autorizado. Configura ALLOWED_ORIGINS en el agente." });
