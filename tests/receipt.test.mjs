@@ -11,10 +11,11 @@ test("genera un ticket ESC/POS de Ikiway con raster PDF417 y corte", () => {
   assert.match(data.toString("latin1"), /IKIWAY SPA/);
 });
 
-test("convierte el PNG a filas de bits sin cambiar sus dimensiones", () => {
+test("reduce el PDF417 a la mitad sin interpolar sus módulos", () => {
   const raster = pdf417Raster(barcodeDataUri(65, 20), 384);
-  assert.deepEqual([...raster.subarray(0, 8)], [0x1d, 0x76, 0x30, 0, 9, 0, 20, 0]);
-  assert.equal(raster.length, 8 + 9 * 20);
+  assert.deepEqual([...raster.subarray(0, 8)], [0x1d, 0x76, 0x30, 0, 5, 0, 10, 0]);
+  assert.equal(raster.length, 8 + 5 * 10);
+  assert.deepEqual([...raster.subarray(8, 12)], [0xaa, 0xaa, 0xaa, 0xaa]);
 });
 
 test("rechaza un DTE electrónico sin PDF417 antes de imprimir", () => {
@@ -26,6 +27,6 @@ test("rechaza un DTE electrónico sin PDF417 antes de imprimir", () => {
 test("rechaza un PDF417 más ancho que el cabezal de 58 mm", () => {
   const payload = receipt();
   payload.config.paper_width = "58";
-  payload.electronic_document.pdf417_data_uri = barcodeDataUri(385, 20);
+  payload.electronic_document.pdf417_data_uri = barcodeDataUri(769, 20);
   assert.throws(() => buildReceipt(payload), /excede 384 puntos/);
 });

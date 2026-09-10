@@ -1,6 +1,6 @@
 {
   "name": "ikiway-pos-printer-agent",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "description": "Agente de impresión ESC/POS USB para Ikiway Commerce",
   "author": "Ikiway",
   "private": true,
