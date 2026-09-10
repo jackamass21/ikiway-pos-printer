@@ -20,8 +20,8 @@ npm run dist:win
 También puedes hacer doble clic en `compilar_ikiway_pos_printer.bat`. Los dos
 ejecutables quedan en `dist/`:
 
-- `Ikiway-POS-Printer-Setup-2.1.6-x64.exe`
-- `Ikiway-POS-Printer-Portable-2.1.6-x64.exe`
+- `Ikiway-POS-Printer-Setup-2.1.7-x64.exe`
+- `Ikiway-POS-Printer-Portable-2.1.7-x64.exe`
 
 El instalador crea accesos directos. La aplicación permanece activa en el área de
 notificación al cerrar la ventana. En el equipo de caja también debes instalar

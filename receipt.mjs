@@ -34,25 +34,23 @@ export function validateReceipt(p) {
   return p;
 }
 
-// GS v 0. Reducir a la mitad con vecino más cercano: nunca interpolar ni
-// suavizar un timbre PDF417 porque altera los bordes de sus módulos.
+// GS v 0. Conservar todas las columnas del PDF417 para no perder módulos y
+// reducir solamente la altura a la mitad, sin interpolación ni suavizado.
 export function pdf417Raster(uri, maxWidth) {
   if (typeof uri !== "string" || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(uri) || uri.length > 400000) fail("PDF417 debe ser un PNG base64 valido");
   const buffer = Buffer.from(uri.split(",")[1], "base64");
   if (buffer.length < 24 || !buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) fail("PNG invalido");
   const width = buffer.readUInt32BE(16), height = buffer.readUInt32BE(20);
-  const scaledWidth = Math.max(1, Math.ceil(width / 2));
   const scaledHeight = Math.max(1, Math.ceil(height / 2));
-  if (!width || scaledWidth > maxWidth || !height || scaledHeight > 2048) fail(`PDF417 excede ${maxWidth} puntos o tiene dimensiones invalidas; regenerar desde el TED para este papel`);
+  if (!width || width > maxWidth || !height || scaledHeight > 2048) fail(`PDF417 excede ${maxWidth} puntos o tiene dimensiones invalidas; regenerar desde el TED para este papel`);
   let png;
   try { png = PNG.sync.read(buffer, { checkCRC: true }); } catch { fail("PNG del PDF417 corrupto"); }
-  const bytesPerRow = Math.ceil(scaledWidth / 8);
+  const bytesPerRow = Math.ceil(width / 8);
   const raster = Buffer.alloc(bytesPerRow * scaledHeight);
   for (let y = 0; y < scaledHeight; y++) {
-    for (let x = 0; x < scaledWidth; x++) {
-      const sourceX = Math.min(width - 1, x * 2);
+    for (let x = 0; x < width; x++) {
       const sourceY = Math.min(height - 1, y * 2);
-      const i = (sourceY * width + sourceX) * 4;
+      const i = (sourceY * width + x) * 4;
       const luminance = (png.data[i] + png.data[i + 1] + png.data[i + 2]) / 3;
       const onWhite = (luminance * png.data[i + 3] + 255 * (255 - png.data[i + 3])) / 255;
       if (onWhite < 128) raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
